@@ -33,10 +33,34 @@ def read_google_sheet(secrets_file, sheet_name='Sheet1'):
     df = pd.DataFrame(rows2, columns=names)
     return df
 
-def read_google_doc(secrets_file):
-    return secrets_file
+def list_google_docs(secrets_file):
+    # read secrets json
+    secrets = load_json(secrets_file)
+    api_key = secrets['api_key']
+    drive = secrets['corpora_drive_id']
+    # build the endpoint url
+    url = f"https://www.googleapis.com/drive/v3/files?q='{drive}'+in+parents&key={api_key}"
+    response = requests.get(url)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        files = response.json().get('files', [])
+    else:
+        print(f"Failed to retrieve files. Status code: {response.status_code}")
+        print(f"Debug text: {response.text}")
+        return None, None
+
+    # stack file ids and names for each entry
+    ids = []
+    names = []
+    for a_file in files:
+        if a_file['kind'] == 'drive#file':
+            ids.append(a_file['id'])
+            names.append(a_file['name'])
+    return ids, names
 
 
 if __name__ == '__main__':
-    df = read_google_sheet('secrets.json')
-    print(df)
+    # we test stuff here
+    ids, names = list_google_docs('./secrets.json')
+    print(f"ids = {ids}, names = {names}")
