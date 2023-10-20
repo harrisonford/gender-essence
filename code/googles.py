@@ -59,8 +59,41 @@ def list_google_docs(secrets_file):
             names.append(a_file['name'])
     return ids, names
 
+def get_google_doc(file_id, secrets_file):
+    # read secrets json
+    secrets = load_json(secrets_file)
+    api_key = secrets['api_key']
+
+    # Define the endpoint URL
+    url = f"https://docs.googleapis.com/v1/documents/{file_id}?key={api_key}"
+    # Make the GET request
+    response = requests.get(url)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        data = response.json()
+        print(f"data = {data}")
+        # Extract the document title and content
+        title = data['title']
+
+        # Extract the text from the document
+        text_content = ''
+        for element in data.get('body').get('content'):
+            if 'paragraph' in element:
+                for text_element in element.get('paragraph').get('elements'):
+                    text_run = text_element.get('textRun')
+                    if text_run:
+                        text_content += text_run.get('content')
+        
+        print(f"Title: {title}\n\n{text_content}")
+
+    else:
+        print(f"Failed to retrieve document. Status code: {response.status_code}")
+        print(response.text)
+
+    return
 
 if __name__ == '__main__':
     # we test stuff here
-    ids, names = list_google_docs('./secrets.json')
-    print(f"ids = {ids}, names = {names}")
+    # '13Nu_jv8T21YsU25uUlZ8jhfFeYxzER1l' -> fileid test
+    get_google_doc('13Nu_jv8T21YsU25uUlZ8jhfFeYxzER1l', './secrets.json')
