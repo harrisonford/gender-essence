@@ -2,6 +2,12 @@
 import requests
 import json
 import pandas as pd
+import os
+import pickle
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from google.auth.transport.requests import Request
 
 
 def load_json(file):
@@ -59,41 +65,51 @@ def list_google_docs(secrets_file):
             names.append(a_file['name'])
     return ids, names
 
-def get_google_doc(file_id, secrets_file):
-    # read secrets json
-    secrets = load_json(secrets_file)
-    api_key = secrets['api_key']
+def authenticate(scopes=['https://www.googleapis.com/auth/documents.readonly',], secrets='secrets_oauth2.json'):
+   # authenticate with Google OAuth2.0 and return the service
+    creds = None
+    # The file token.pickle stores the user's access and refresh tokens.
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
 
-    # Define the endpoint URL
-    url = f"https://docs.googleapis.com/v1/documents/{file_id}?key={api_key}"
-    # Make the GET request
-    response = requests.get(url)
+    # if there are no (valid) credentials available, ask the user to log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(secrets, scopes)
+            creds = flow.run_local_server(port=0)
+            # save the credentials for the next run
+            with open('token.pickle', 'wb') as token:
+                pickle.dump(creds, token)
+    return build('docs', 'v1', credentials=creds)
 
-    # Check if the request was successful
-    if response.status_code == 200:
-        data = response.json()
-        print(f"data = {data}")
-        # Extract the document title and content
-        title = data['title']
+def get_google_doc(file_id):
 
-        # Extract the text from the document
-        text_content = ''
-        for element in data.get('body').get('content'):
-            if 'paragraph' in element:
-                for text_element in element.get('paragraph').get('elements'):
-                    text_run = text_element.get('textRun')
-                    if text_run:
-                        text_content += text_run.get('content')
-        
-        print(f"Title: {title}\n\n{text_content}")
+    # create an authenticated service
+    service = authenticate()
+    print(service.documents().get(documentId=file_id).body())
 
-    else:
-        print(f"Failed to retrieve document. Status code: {response.status_code}")
-        print(response.text)
-
+    # get the document content using the Docs API
+    try:
+        doc = service.documents().get(documentId=file_id).execute()
+        # doc = requests.get(f"https://docs.googleapis.com/v1/documents/{file_id}")
+        print(f"request done! {doc}")
+        print(doc.text)
+        return doc
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        print(f"An error occurred: {error.resp.status}")
+        print(error.resp.reason)
+        print(error.content.decode())
     return
 
 if __name__ == '__main__':
     # we test stuff here
     # '13Nu_jv8T21YsU25uUlZ8jhfFeYxzER1l' -> fileid test
-    get_google_doc('13Nu_jv8T21YsU25uUlZ8jhfFeYxzER1l', './secrets.json')
+    # get_google_doc('13Nu_jv8T21YsU25uUlZ8jhfFeYxzER1l', './secrets.json')
+    # response = authenticate()
+    file_id = "13Nu_jv8T21YsU25uUlZ8jhfFeYxzER1l"
+    doc = get_google_doc(file_id)
+    print(f"doc = {doc}")
