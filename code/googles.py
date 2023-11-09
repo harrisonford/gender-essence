@@ -4,6 +4,8 @@ import json
 import pandas as pd
 import os
 import pickle
+import io
+from googleapiclient.http import MediaIoBaseDownload
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -65,7 +67,7 @@ def list_google_docs(secrets_file):
             names.append(a_file['name'])
     return ids, names
 
-def authenticate(scopes=['https://www.googleapis.com/auth/documents.readonly',], secrets='secrets_oauth2.json'):
+def authenticate(scopes=['https://www.googleapis.com/auth/drive.readonly',], secrets='secrets_oauth2.json'):
    # authenticate with Google OAuth2.0 and return the service
     creds = None
     # The file token.pickle stores the user's access and refresh tokens.
@@ -83,21 +85,25 @@ def authenticate(scopes=['https://www.googleapis.com/auth/documents.readonly',],
             # save the credentials for the next run
             with open('token.pickle', 'wb') as token:
                 pickle.dump(creds, token)
-    return build('docs', 'v1', credentials=creds)
+    return build('drive', 'v3', credentials=creds)
 
 def get_google_doc(file_id):
 
     # create an authenticated service
     service = authenticate()
-    print(service.documents().get(documentId=file_id).body())
 
     # get the document content using the Docs API
     try:
-        doc = service.documents().get(documentId=file_id).execute()
-        # doc = requests.get(f"https://docs.googleapis.com/v1/documents/{file_id}")
-        print(f"request done! {doc}")
-        print(doc.text)
-        return doc
+        request = service.files().get_media(fileId=file_id)
+        file = io.BytesIO()
+        downloader = MediaIoBaseDownload(file, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+            print(f"Download {int(status.progress() * 100)}.")
+
+        return file.getvalue().decode()
+    
     except HttpError as error:
         print(f"An error occurred: {error}")
         print(f"An error occurred: {error.resp.status}")
@@ -108,8 +114,7 @@ def get_google_doc(file_id):
 if __name__ == '__main__':
     # we test stuff here
     # '13Nu_jv8T21YsU25uUlZ8jhfFeYxzER1l' -> fileid test
-    # get_google_doc('13Nu_jv8T21YsU25uUlZ8jhfFeYxzER1l', './secrets.json')
-    # response = authenticate()
     file_id = "13Nu_jv8T21YsU25uUlZ8jhfFeYxzER1l"
     doc = get_google_doc(file_id)
-    print(f"doc = {doc}")
+    print(f"doc:")
+    print(doc)
