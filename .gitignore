@@ -3,3 +3,4 @@ secrets*.json
 code/__pychache__/
 *.pyc
 token.pickle
+.DS_Store
